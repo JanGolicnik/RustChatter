@@ -50,26 +50,9 @@ async fn main() {
 async fn run_server(ip: String) -> std::io::Result<()> {
     let mut server = Server::new(&ip, TCP_PORT).await?;
 
-    let server_lines = server.lines.clone();
-    tokio::spawn(async move {
-        loop {
-            print_server(server_lines.clone()).await;
-            thread::sleep(Duration::from_secs_f32(0.5))
-        }
-    });
-
     server.run().await?;
     Ok(())
 }
-
-async fn print_server(server_lines: Arc<std::sync::Mutex<Vec<String>>>) {
-    let mut lock = server_lines.lock().unwrap();
-    for line in lock.iter() {
-        println!("{line}");
-    }
-    lock.clear();
-}
-
 async fn run_client(ip: String) -> std::io::Result<()> {
     let mut client = Client::new(&ip, TCP_PORT).await?;
 
