@@ -1,10 +1,7 @@
-use std::sync::Arc;
 use std::{env::args, thread, time::Duration};
 
-use chat::client::Client;
+use chat::client::{Client, ClientWriter};
 use chat::server::Server;
-use tokio::io::AsyncWriteExt;
-use tokio::net::tcp::OwnedWriteHalf;
 
 const TCP_PORT: &str = "8100";
 
@@ -56,10 +53,10 @@ async fn run_server(ip: String) -> std::io::Result<()> {
 async fn run_client(ip: String) -> std::io::Result<()> {
     let mut client = Client::new(&ip, TCP_PORT).await?;
 
-    let write_half = client.writer.clone();
+    let client_writer = client.get_writer();
     tokio::spawn(async move {
         loop {
-            let _ = process_client_input(write_half.clone()).await;
+            let _ = process_client_input(&client_writer).await;
             thread::sleep(Duration::from_secs_f32(0.5))
         }
     });
@@ -69,14 +66,14 @@ async fn run_client(ip: String) -> std::io::Result<()> {
     Ok(())
 }
 
-async fn process_client_input(
-    writer: Arc<tokio::sync::Mutex<OwnedWriteHalf>>,
-) -> std::io::Result<()> {
+async fn process_client_input(writer: &ClientWriter) -> std::io::Result<()> {
     let mut input = String::new();
+
     std::io::stdin()
         .read_line(&mut input)
         .expect("error: unable to read user input");
-    let mut writer = writer.lock().await;
-    writer.write_all(input.as_bytes()).await.unwrap();
+
+    writer.write(input).await?;
+
     Ok(())
 }

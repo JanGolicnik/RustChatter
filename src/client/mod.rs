@@ -11,7 +11,10 @@ use tokio::{
 
 pub struct Client {
     reader: Arc<Mutex<BufReader<OwnedReadHalf>>>,
-    pub writer: Arc<Mutex<OwnedWriteHalf>>,
+    writer: Arc<Mutex<OwnedWriteHalf>>,
+}
+pub struct ClientWriter {
+    writer: Arc<Mutex<OwnedWriteHalf>>,
 }
 
 impl Client {
@@ -28,10 +31,10 @@ impl Client {
         })
     }
 
-    pub async fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
-        let mut lock = self.writer.lock().await;
-        lock.write_all(data).await?;
-        Ok(())
+    pub fn get_writer(&self) -> ClientWriter {
+        ClientWriter {
+            writer: self.writer.clone(),
+        }
     }
 
     pub async fn run(&mut self) {
@@ -55,5 +58,13 @@ impl Client {
             };
             line.clear();
         }
+    }
+}
+
+impl ClientWriter {
+    pub async fn write(&self, text: String) -> std::io::Result<()> {
+        let mut lock = self.writer.lock().await;
+        lock.write_all(text.as_bytes()).await?;
+        Ok(())
     }
 }
