@@ -70,7 +70,7 @@ impl Server {
         messages: Arc<Mutex<Vec<Message>>>,
     ) -> std::io::Result<()> {
         loop {
-            thread::sleep(Duration::from_secs_f32(0.5));
+            thread::sleep(Duration::from_secs_f32(0.02));
 
             let mut messages = messages.lock().await;
 

@@ -16,6 +16,9 @@ pub struct Client {
 pub struct ClientWriter {
     writer: Arc<Mutex<OwnedWriteHalf>>,
 }
+pub struct ClientReader {
+    reader: Arc<Mutex<BufReader<OwnedReadHalf>>>,
+}
 
 impl Client {
     pub async fn new(ip: &str, port: &str) -> std::io::Result<Self> {
@@ -37,26 +40,9 @@ impl Client {
         }
     }
 
-    pub async fn run(&mut self) {
-        let reader_clone = self.reader.clone();
-        let f = tokio::spawn(async move {
-            Self::listen_for_messages(reader_clone).await.unwrap();
-        });
-        f.await.unwrap();
-    }
-
-    async fn listen_for_messages(
-        reader: Arc<Mutex<BufReader<OwnedReadHalf>>>,
-    ) -> std::io::Result<()> {
-        let mut reader = reader.lock().await;
-        let mut line: String = "".to_string();
-        loop {
-            match reader.read_line(&mut line).await {
-                Ok(0) => return Ok(()),
-                Ok(_) => println!("{line}"),
-                Err(e) => eprintln!("{e}"),
-            };
-            line.clear();
+    pub fn get_reader(&self) -> ClientReader {
+        ClientReader {
+            reader: self.reader.clone(),
         }
     }
 }
@@ -66,5 +52,19 @@ impl ClientWriter {
         let mut lock = self.writer.lock().await;
         lock.write_all(text.as_bytes()).await?;
         Ok(())
+    }
+}
+
+impl ClientReader {
+    pub async fn read(&self) -> std::io::Result<Option<String>> {
+        let mut reader = self.reader.lock().await;
+
+        let mut line: String = "".to_string();
+
+        match reader.read_line(&mut line).await {
+            Ok(0) => Ok(None),
+            Ok(_) => Ok(Some(line)),
+            Err(e) => Err(e),
+        }
     }
 }

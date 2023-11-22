@@ -1,6 +1,6 @@
 use std::{env::args, thread, time::Duration};
 
-use chat::client::{Client, ClientWriter};
+use chat::client::{Client, ClientReader, ClientWriter};
 use chat::server::Server;
 
 const TCP_PORT: &str = "8100";
@@ -51,29 +51,41 @@ async fn run_server(ip: String) -> std::io::Result<()> {
     Ok(())
 }
 async fn run_client(ip: String) -> std::io::Result<()> {
-    let mut client = Client::new(&ip, TCP_PORT).await?;
+    let client = Client::new(&ip, TCP_PORT).await?;
 
     let client_writer = client.get_writer();
-    tokio::spawn(async move {
-        loop {
-            let _ = process_client_input(&client_writer).await;
-            thread::sleep(Duration::from_secs_f32(0.5))
-        }
+    let process_input = tokio::spawn(async move {
+        process_client_input(&client_writer).await.unwrap();
     });
 
-    client.run().await;
+    let client_reader = client.get_reader();
+    let refresh = tokio::spawn(async move {
+        refresh_client(&client_reader).await.unwrap();
+    });
+
+    process_input.await?;
+    refresh.await?;
 
     Ok(())
 }
 
 async fn process_client_input(writer: &ClientWriter) -> std::io::Result<()> {
-    let mut input = String::new();
+    loop {
+        thread::sleep(Duration::from_secs_f32(0.1));
+        let mut input = String::new();
+        std::io::stdin()
+            .read_line(&mut input)
+            .expect("error: unable to read user input");
 
-    std::io::stdin()
-        .read_line(&mut input)
-        .expect("error: unable to read user input");
+        writer.write(input).await?;
+    }
+}
 
-    writer.write(input).await?;
+async fn refresh_client(reader: &ClientReader) -> std::io::Result<()> {
+    println!("reading");
+    while let Some(line) = reader.read().await? {
+        println!("{line}");
+    }
 
     Ok(())
 }
