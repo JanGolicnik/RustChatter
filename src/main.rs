@@ -72,11 +72,11 @@ async fn run_client(ip: String) -> std::io::Result<()> {
 async fn process_client_input(
     writer: Arc<tokio::sync::Mutex<OwnedWriteHalf>>,
 ) -> std::io::Result<()> {
-    thread::sleep(Duration::from_millis(2000));
-
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .expect("error: unable to read user input");
     let mut writer = writer.lock().await;
-    writer.write_all(b"xd\n").await.unwrap();
-
-    println!("sent");
+    writer.write_all(input.as_bytes()).await.unwrap();
     Ok(())
 }
