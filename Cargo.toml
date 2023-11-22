@@ -5,7 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["event-stream"]
+event-stream = []
+
 [dependencies]
 crossterm = "0.27.0"
 tokio = { version = "1.34.0", features = ["full"]}
 uuid = { version = "1.6.1", features= ["v4", "fast-rng", "macro-diagnostics"]}
+futures-core = { version = "0.3", optional = true, default-features = false }

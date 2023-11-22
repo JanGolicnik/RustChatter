@@ -76,6 +76,7 @@ name = "chat"
 version = "0.1.0"
 dependencies = [
  "crossterm",
+ "futures-core",
  "tokio",
  "uuid",
 ]
@@ -104,6 +105,12 @@ checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "futures-core"
+version = "0.3.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb1d22c66e66d9d72e1758f0bd7d4fd0bee04cad842ee34587d68c07e45d088c"
 
 [[package]]
 name = "getrandom"
