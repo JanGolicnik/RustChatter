@@ -1,15 +1,14 @@
 use std::env::args;
-use std::io::stdout;
-use std::sync::Arc;
+use std::io::{stdout, Write};
 
 use chat::client::{Client, ClientReader, ClientWriter};
 use chat::server::Server;
-use crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tokio::sync::Mutex;
+use crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::style::Print;
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
-    execute,
+    execute, queue,
     terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
 };
 
@@ -69,24 +68,18 @@ async fn run_client(ip: String) -> std::io::Result<()> {
     execute!(stdout, EnableMouseCapture)?;
     execute!(stdout, Clear(ClearType::Purge))?;
 
-    let current_user_input = Arc::new(Mutex::new(String::new()));
-    let current_user_input_clone = current_user_input.clone();
     let client_writer = client.get_writer();
     let process_input = tokio::spawn(async move {
-        process_client_input(&client_writer, current_user_input_clone)
-            .await
-            .unwrap();
+        process_client_input(&client_writer).await.unwrap();
     });
 
     let client_reader = client.get_reader();
-    let refresh = tokio::spawn(async move {
-        refresh_client(&client_reader, current_user_input)
-            .await
-            .unwrap();
+    let read = tokio::spawn(async move {
+        read_client(&client_reader).await.unwrap();
     });
 
     process_input.await?;
-    refresh.await?;
+    read.await?;
 
     execute!(stdout, DisableMouseCapture)?;
     disable_raw_mode()?;
@@ -94,19 +87,8 @@ async fn run_client(ip: String) -> std::io::Result<()> {
     Ok(())
 }
 
-async fn process_client_input(
-    writer: &ClientWriter,
-    current_user_input: Arc<Mutex<String>>,
-) -> std::io::Result<()> {
-    // loop {
-    //     thread::sleep(Duration::from_secs_f32(0.1));
-    //     let mut input = String::new();
-    //     std::io::stdin()
-    //         .read_line(&mut input)
-    //         .expect("error: unable to read user input");
-
-    //     writer.write(input).await?;
-    // }
+async fn process_client_input(writer: &ClientWriter) -> std::io::Result<()> {
+    let mut current_input = String::new();
 
     loop {
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -117,44 +99,67 @@ async fn process_client_input(
 
                 match code {
                     KeyCode::Char(c) => {
-                        let mut current_user_input = current_user_input.lock().await;
-                        current_user_input.push(c);
+                        current_input.push(c);
                     }
                     KeyCode::Enter => {
-                        let mut current_user_input = current_user_input.lock().await;
-                        writer.write(format!("{current_user_input}\n")).await?;
-                        current_user_input.clear();
+                        writer.write(format!("{current_input}\n")).await?;
+                        current_input.clear();
                     }
                     KeyCode::Esc => break,
+                    KeyCode::Backspace => {
+                        current_input.pop();
+                    }
                     _ => {}
                 }
+
+                let height = crossterm::terminal::size()?.1 - 1;
+                execute!(
+                    stdout(),
+                    crossterm::cursor::MoveTo(0, height),
+                    crossterm::terminal::Clear(ClearType::CurrentLine),
+                    Print(current_input.clone())
+                )?;
             }
         }
     }
     Ok(())
 }
 
-async fn refresh_client(
-    reader: &ClientReader,
-    current_user_input: Arc<Mutex<String>>,
-) -> std::io::Result<()> {
-    let mut received_lines: Vec<String> = Vec::new();
-    let mut stdout = stdout();
+async fn read_client(reader: &ClientReader) -> std::io::Result<()> {
+    let mut lines: Vec<String> = Vec::new();
+
     while let Some(line) = reader.read().await? {
-        received_lines.push(line);
+        lines.push(line.trim().to_string());
+        let height = (crossterm::terminal::size()?.1 - 2) as usize;
 
-        execute!(stdout, Clear(ClearType::Purge))?;
-        for line in received_lines.iter() {
-            println!("{line}");
-        }
+        let mut stdout = stdout();
 
-        execute!(
+        queue!(
             stdout,
-            crossterm::cursor::MoveTo(0, crossterm::terminal::size()?.1 - 1)
+            crossterm::cursor::MoveTo(0, height as u16),
+            crossterm::terminal::Clear(ClearType::FromCursorUp),
+            crossterm::terminal::Clear(ClearType::CurrentLine),
         )?;
 
-        let current_user_input = current_user_input.lock().await;
-        println!("{current_user_input}");
+        let mut line_index = lines.len() as i32;
+        for i in 0..height {
+            let cursor_y = height - i;
+            if line_index >= 0 {
+                line_index -= 1;
+            }
+            let line = lines.get(line_index as usize);
+            queue!(
+                stdout,
+                crossterm::cursor::MoveTo(0, cursor_y as u16),
+                Print(if let Some(line) = line { line } else { "" })
+            )?;
+        }
+        queue!(
+            stdout,
+            crossterm::cursor::MoveTo(0, crossterm::terminal::size()?.1)
+        )?;
+
+        stdout.flush()?;
     }
 
     Ok(())
